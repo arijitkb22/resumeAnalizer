@@ -1,19 +1,19 @@
+# app.py
+import streamlit as st
+import os
+from typing import Dict, Optional
 import pdfplumber
 from docx import Document
 from groq import Groq
-import os
-from typing import Dict, Optional
-from dotenv import load_dotenv
 
 class ResumeAnalyzer:
     def __init__(self):
-        """Initialize the resume analyzer with Groq API from environment variables"""
-        load_dotenv()  # Load environment variables
-        api_key = os.getenv('GROQ_API_KEY')
-        if not api_key:
-            raise ValueError("GROQ_API_KEY not found in environment variables")
-        
-        self.client = Groq(api_key=api_key)
+        """Initialize the resume analyzer with Groq API from Streamlit secrets"""
+        # Get API key from Streamlit secrets
+        try:
+            self.client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+        except Exception:
+            raise ValueError("GROQ_API_KEY not found in Streamlit secrets")
         
         # Default prompts
         self.default_prompts = {
@@ -81,3 +81,65 @@ class ResumeAnalyzer:
     def analyze_single_prompt(self, resume_text: str, prompt: str) -> str:
         """Analyze resume with a single custom prompt"""
         return self.get_feedback_from_model(resume_text, prompt)
+
+def main():
+    st.set_page_config(page_title="Resume Analyzer", layout="wide")
+    
+    st.title("📄 Resume Analyzer")
+    
+    # Initialize analyzer
+    try:
+        analyzer = ResumeAnalyzer()
+        
+        # File upload
+        uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=['pdf', 'docx'])
+
+        if uploaded_file:
+            with st.spinner("Extracting text from resume..."):
+                resume_text = analyzer.extract_text(uploaded_file)
+                
+            if resume_text:
+                st.success("Resume text extracted successfully!")
+                
+                # Analysis options
+                analysis_type = st.radio(
+                    "Choose analysis type:",
+                    ["Default Analysis", "Custom Prompt"]
+                )
+
+                if analysis_type == "Default Analysis":
+                    if st.button("Analyze Resume"):
+                        with st.spinner("Analyzing resume..."):
+                            feedback = analyzer.analyze_resume(resume_text)
+                            
+                            # Display feedback in expandable sections
+                            for section, comments in feedback.items():
+                                with st.expander(f"{section.title()} Feedback", expanded=True):
+                                    st.write(comments)
+                                    
+                else:  # Custom Prompt
+                    custom_prompt = st.text_area(
+                        "Enter your custom prompt:",
+                        height=100,
+                        placeholder="E.g., Analyze the resume's formatting and suggest improvements..."
+                    )
+                    
+                    if custom_prompt and st.button("Get Custom Analysis"):
+                        with st.spinner("Analyzing with custom prompt..."):
+                            feedback = analyzer.analyze_single_prompt(resume_text, custom_prompt)
+                            st.write(feedback)
+
+                # Show extracted text in expandable section
+                with st.expander("View Extracted Text", expanded=False):
+                    st.text_area("Extracted Text", resume_text, height=300)
+            else:
+                st.error("Error extracting text from the file. Please make sure it's a valid PDF or DOCX file.")
+                
+    except ValueError as e:
+        st.error(f"Configuration Error: {str(e)}")
+        st.info("Please make sure GROQ_API_KEY is properly configured in Streamlit secrets.")
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    main()
