@@ -50,40 +50,7 @@ class ResumeAnalyzer:
         "Suggest improvements to make this section stronger, emphasizing measurable results, leadership, and industry-specific keywords."
     )
 }
-        
-    def search_jobs(self, job_title: str, experience_level: str, role: str, location: str = "India", days_ago: int = 30) -> str:
-        """
-        Search for jobs on platforms like LinkedIn, Naukri, Monster, etc.
-        Filters jobs posted within the last `days_ago` days and in the specified location.
-        Includes job links in the response.
-        """
-        try:
-            prompt = (
-                f"Search for job listings for the position of {job_title} of {role} with {experience_level} level of experience in {location} posted within the last {days_ago} days. "
-                "Include job postings from platforms like LinkedIn, Naukri, Monster, and Instahire. "
-                "Provide details such as job title, company name, location, a brief description, and a link to the job posting."
-            )
-            return self.get_feedback_from_model("", prompt)
-        except Exception as e:
-            return f"Error searching for jobs: {str(e)}"
-        
-    def generate_interview_questions(self, company_name: str, experience_level: str, role: str) -> str:
-        """Generate frequently asked interview questions for a specific company"""
-        try:
-            prompt = (
-                f"Generate a list of frequently asked interview questions for {company_name} of {role} with {experience_level} lavelexperiance . "
-                "Include both technical and behavioral questions. Provide detailed answers for each question."
-            )
-            return self.get_feedback_from_model("", prompt)
-        except Exception as e:
-            return f"Error generating interview questions: {str(e)}"
-
-
     def extract_text_from_pdf(self, pdf_file) -> tuple[str, str]:
-        """
-        Extract text from PDF file with enhanced error handling
-        Returns: (text, error_message)
-        """
         try:
             pdf_bytes = pdf_file.read()
             pdf_file.seek(0)
@@ -109,10 +76,6 @@ class ResumeAnalyzer:
             return "", f"PDF processing error: {str(e)}\n\nTechnical details:\n{error_detail}"
 
     def extract_text_from_docx(self, docx_file) -> tuple[str, str]:
-        """
-        Extract text from DOCX file with enhanced error handling
-        Returns: (text, error_message)
-        """
         try:
             docx_bytes = docx_file.read()
             docx_file.seek(0)
@@ -129,7 +92,6 @@ class ResumeAnalyzer:
             return "", f"DOCX processing error: {str(e)}\n\nTechnical details:\n{error_detail}"
 
     def extract_text(self, file) -> tuple[Optional[str], Optional[str]]:
-        """Extract text from uploaded file with enhanced error handling"""
         try:
             if not file:
                 return None, "No file uploaded"
@@ -148,7 +110,6 @@ class ResumeAnalyzer:
             return None, f"File processing error: {str(e)}\n\nTechnical details:\n{error_detail}"
 
     def get_feedback_from_model(self, resume_text: str, prompt: str) -> str:
-        """Get feedback using Groq's Mixtral model"""
         try:
             completion = self.client.chat.completions.create(
                 model="mixtral-8x7b-32768",
@@ -166,7 +127,6 @@ class ResumeAnalyzer:
             return f"Error getting feedback: {str(e)}"
 
     def analyze_resume(self, resume_text: str, prompts: Dict[str, str] = None) -> Dict[str, str]:
-        """Analyze resume with given prompts"""
         prompts = prompts or self.default_prompts
         feedback = {}
         
@@ -178,6 +138,27 @@ class ResumeAnalyzer:
     def analyze_single_prompt(self, resume_text: str, prompt: str) -> str:
         """Analyze resume with a single custom prompt"""
         return self.get_feedback_from_model(resume_text, prompt)
+    
+    def search_jobs(self, job_title: str, experience_level: str, role: str, location: str = "India", days_ago: int = 30) -> str:
+        try:
+            prompt = (
+                f"Search for job listings for the position of {job_title} of {role} with {experience_level} level of experience in {location} posted within the last {days_ago} days. "
+                "Include job postings from platforms like LinkedIn, Naukri, Monster, and Instahire. "
+                "Provide details such as job title, company name, location, a brief description, and a link to the job posting."
+            )
+            return self.get_feedback_from_model("", prompt)
+        except Exception as e:
+            return f"Error searching for jobs: {str(e)}"
+        
+    def generate_interview_questions(self, company_name: str, experience_level: str, role: str) -> str:
+        try:
+            prompt = (
+                f"Generate a list of frequently asked interview questions for {company_name} of {role} with {experience_level} lavelexperiance . "
+                "Include both technical and behavioral questions. Provide detailed answers for each question."
+            )
+            return self.get_feedback_from_model("", prompt)
+        except Exception as e:
+            return f"Error generating interview questions: {str(e)}"
 
 def main():
     st.set_page_config(page_title="Resume Analyzer", layout="wide")
