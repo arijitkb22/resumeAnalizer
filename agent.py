@@ -51,7 +51,6 @@ class ResumeAnalyzer:
     )
 }
 
-
     def extract_text_from_pdf(self, pdf_file) -> tuple[str, str]:
         """
         Extract text from PDF file with enhanced error handling
