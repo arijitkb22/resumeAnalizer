@@ -50,6 +50,34 @@ class ResumeAnalyzer:
         "Suggest improvements to make this section stronger, emphasizing measurable results, leadership, and industry-specific keywords."
     )
 }
+        
+    def search_jobs(self, job_title: str, experience_level: str, role: str, location: str = "India", days_ago: int = 30) -> str:
+        """
+        Search for jobs on platforms like LinkedIn, Naukri, Monster, etc.
+        Filters jobs posted within the last `days_ago` days and in the specified location.
+        Includes job links in the response.
+        """
+        try:
+            prompt = (
+                f"Search for job listings for the position of {job_title} of {role} with {experience_level} level of experience in {location} posted within the last {days_ago} days. "
+                "Include job postings from platforms like LinkedIn, Naukri, Monster, and Instahire. "
+                "Provide details such as job title, company name, location, a brief description, and a link to the job posting."
+            )
+            return self.get_feedback_from_model("", prompt)
+        except Exception as e:
+            return f"Error searching for jobs: {str(e)}"
+        
+    def generate_interview_questions(self, company_name: str, experience_level: str, role: str) -> str:
+        """Generate frequently asked interview questions for a specific company"""
+        try:
+            prompt = (
+                f"Generate a list of frequently asked interview questions for {company_name} of {role} with {experience_level} lavelexperiance . "
+                "Include both technical and behavioral questions. Provide detailed answers for each question."
+            )
+            return self.get_feedback_from_model("", prompt)
+        except Exception as e:
+            return f"Error generating interview questions: {str(e)}"
+
 
     def extract_text_from_pdf(self, pdf_file) -> tuple[str, str]:
         """
@@ -57,11 +85,9 @@ class ResumeAnalyzer:
         Returns: (text, error_message)
         """
         try:
-            # Convert StreamlitUploadedFile to bytes
             pdf_bytes = pdf_file.read()
-            pdf_file.seek(0)  # Reset file pointer
+            pdf_file.seek(0)
             
-            # Try to open PDF from bytes
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
                 text = ""
                 for page_num, page in enumerate(pdf.pages, 1):
@@ -170,11 +196,9 @@ def main():
             if resume_text:
                 st.success("Resume text extracted successfully!")
                 
-                # Show extracted text in expandable section
                 with st.expander("View Extracted Text", expanded=False):
                     st.text_area("Extracted Text", resume_text, height=300)
                 
-                # Analysis options
                 analysis_type = st.radio(
                     "Choose analysis type:",
                     ["Default Analysis", "Custom Prompt"]
@@ -189,7 +213,7 @@ def main():
                                 with st.expander(f"{section.title()} Feedback", expanded=True):
                                     st.write(comments)
                                     
-                else:  # Custom Prompt
+                else:
                     custom_prompt = st.text_area(
                         "Enter your custom prompt:",
                         height=100,
