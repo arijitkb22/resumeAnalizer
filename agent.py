@@ -1,21 +1,20 @@
-# app.py
 import streamlit as st
 import os
 from typing import Dict, Optional
 import pdfplumber
 from docx import Document
 from groq import Groq
+import traceback
+import io
 
 class ResumeAnalyzer:
     def __init__(self):
         """Initialize the resume analyzer with Groq API from Streamlit secrets"""
-        # Get API key from Streamlit secrets
         try:
             self.client = Groq(api_key=st.secrets["GROQ_API_KEY"])
         except Exception:
             raise ValueError("GROQ_API_KEY not found in Streamlit secrets")
         
-        # Default prompts
         self.default_prompts = {
             "structure": "Does the resume follow a clear structure with sections like 'Education', 'Work Experience', 'Skills', etc.? Please suggest improvements.",
             "skills": "Are the skills listed relevant to the job role and clear? Provide suggestions for additional skills or clarifications.",
@@ -23,18 +22,75 @@ class ResumeAnalyzer:
             "experience": "Does the work experience section include clear and measurable achievements? Suggest improvements for clarity."
         }
 
-    def extract_text_from_pdf(self, pdf_file) -> str:
-        """Extract text from PDF file"""
-        text = ""
-        with pdfplumber.open(pdf_file) as pdf:
-            for page in pdf.pages:
-                text += page.extract_text() or ""
-        return text
+    def extract_text_from_pdf(self, pdf_file) -> tuple[str, str]:
+        """
+        Extract text from PDF file with enhanced error handling
+        Returns: (text, error_message)
+        """
+        try:
+            # Convert StreamlitUploadedFile to bytes
+            pdf_bytes = pdf_file.read()
+            pdf_file.seek(0)  # Reset file pointer
+            
+            # Try to open PDF from bytes
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                text = ""
+                for page_num, page in enumerate(pdf.pages, 1):
+                    try:
+                        page_text = page.extract_text()
+                        if page_text:
+                            text += page_text
+                        else:
+                            return "", f"Page {page_num} appears to be empty or unreadable"
+                    except Exception as e:
+                        return "", f"Error extracting text from page {page_num}: {str(e)}"
+                
+                if not text.strip():
+                    return "", "No text could be extracted from the PDF. The file might be scanned or image-based."
+                return text, ""
+                
+        except Exception as e:
+            error_detail = traceback.format_exc()
+            return "", f"PDF processing error: {str(e)}\n\nTechnical details:\n{error_detail}"
 
-    def extract_text_from_docx(self, docx_file) -> str:
-        """Extract text from DOCX file"""
-        doc = Document(docx_file)
-        return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+    def extract_text_from_docx(self, docx_file) -> tuple[str, str]:
+        """
+        Extract text from DOCX file with enhanced error handling
+        Returns: (text, error_message)
+        """
+        try:
+            docx_bytes = docx_file.read()
+            docx_file.seek(0)
+            
+            doc = Document(io.BytesIO(docx_bytes))
+            text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+            
+            if not text.strip():
+                return "", "No text could be extracted from the DOCX file. The file might be empty or corrupted."
+            return text, ""
+            
+        except Exception as e:
+            error_detail = traceback.format_exc()
+            return "", f"DOCX processing error: {str(e)}\n\nTechnical details:\n{error_detail}"
+
+    def extract_text(self, file) -> tuple[Optional[str], Optional[str]]:
+        """Extract text from uploaded file with enhanced error handling"""
+        try:
+            if not file:
+                return None, "No file uploaded"
+                
+            file_extension = os.path.splitext(file.name)[1].lower()
+            
+            if file_extension == '.pdf':
+                return self.extract_text_from_pdf(file)
+            elif file_extension in ['.docx', '.doc']:
+                return self.extract_text_from_docx(file)
+            else:
+                return None, f"Unsupported file type: {file_extension}. Please upload a PDF or DOCX file."
+                
+        except Exception as e:
+            error_detail = traceback.format_exc()
+            return None, f"File processing error: {str(e)}\n\nTechnical details:\n{error_detail}"
 
     def get_feedback_from_model(self, resume_text: str, prompt: str) -> str:
         """Get feedback using Groq's Mixtral model"""
@@ -53,20 +109,6 @@ class ResumeAnalyzer:
             return completion.choices[0].message.content
         except Exception as e:
             return f"Error getting feedback: {str(e)}"
-
-    def extract_text(self, file) -> Optional[str]:
-        """Extract text from uploaded file"""
-        try:
-            file_extension = os.path.splitext(file.name)[1].lower()
-            
-            if file_extension == '.pdf':
-                return self.extract_text_from_pdf(file)
-            elif file_extension in ['.docx', '.doc']:
-                return self.extract_text_from_docx(file)
-            else:
-                return None
-        except Exception as e:
-            return None
 
     def analyze_resume(self, resume_text: str, prompts: Dict[str, str] = None) -> Dict[str, str]:
         """Analyze resume with given prompts"""
@@ -87,19 +129,21 @@ def main():
     
     st.title("📄 Resume Analyzer")
     
-    # Initialize analyzer
     try:
         analyzer = ResumeAnalyzer()
         
-        # File upload
         uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=['pdf', 'docx'])
 
         if uploaded_file:
             with st.spinner("Extracting text from resume..."):
-                resume_text = analyzer.extract_text(uploaded_file)
+                resume_text, error_message = analyzer.extract_text(uploaded_file)
                 
             if resume_text:
                 st.success("Resume text extracted successfully!")
+                
+                # Show extracted text in expandable section
+                with st.expander("View Extracted Text", expanded=False):
+                    st.text_area("Extracted Text", resume_text, height=300)
                 
                 # Analysis options
                 analysis_type = st.radio(
@@ -112,7 +156,6 @@ def main():
                         with st.spinner("Analyzing resume..."):
                             feedback = analyzer.analyze_resume(resume_text)
                             
-                            # Display feedback in expandable sections
                             for section, comments in feedback.items():
                                 with st.expander(f"{section.title()} Feedback", expanded=True):
                                     st.write(comments)
@@ -129,17 +172,22 @@ def main():
                             feedback = analyzer.analyze_single_prompt(resume_text, custom_prompt)
                             st.write(feedback)
 
-                # Show extracted text in expandable section
-                with st.expander("View Extracted Text", expanded=False):
-                    st.text_area("Extracted Text", resume_text, height=300)
             else:
-                st.error("Error extracting text from the file. Please make sure it's a valid PDF or DOCX file.")
+                st.error(error_message)
+                st.info("Troubleshooting tips:")
+                st.markdown("""
+                - Make sure the PDF is not password protected
+                - Check if the PDF contains actual text (not just scanned images)
+                - Try converting scanned PDFs using OCR software first
+                - Verify the file is not corrupted by opening it in another PDF reader
+                """)
                 
     except ValueError as e:
         st.error(f"Configuration Error: {str(e)}")
         st.info("Please make sure GROQ_API_KEY is properly configured in Streamlit secrets.")
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
+        st.info("Please try again or contact support if the issue persists.")
 
 if __name__ == "__main__":
     main()
